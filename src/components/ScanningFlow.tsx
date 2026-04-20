@@ -9,6 +9,14 @@ import {
   Loader2,
 } from "lucide-react";
 
+// FaceDetector is an experimental browser API (Chrome/Edge)
+declare class FaceDetector {
+  constructor(options?: { fastMode?: boolean; maxDetectedFaces?: number });
+  detect(
+    image: HTMLVideoElement | HTMLImageElement | HTMLCanvasElement,
+  ): Promise<Array<{ boundingBox: DOMRectReadOnly }>>;
+}
+
 type QualityState = "good" | "adjusting" | "too-close" | "too-far";
 type NotifyStatus = "idle" | "sending" | "success" | "error";
 
@@ -120,14 +128,134 @@ export default function ScanningFlow() {
     startCamera();
   }, []);
 
-  // Simulate quality detection per step
+  // Real-time face/position detection
   useEffect(() => {
-    if (!camReady) return;
+    if (!camReady || currentStep >= 5) return;
 
-    setQuality("adjusting");
-    const t1 = setTimeout(() => setQuality("good"), 1200);
+    const video = videoRef.current;
+    if (!video) return;
 
-    return () => clearTimeout(t1);
+    let rafId: number;
+    let faceDetector: FaceDetector | null = null;
+
+    // Try native FaceDetector (Chrome / Edge)
+    if (typeof globalThis.FaceDetector !== "undefined") {
+      faceDetector = new FaceDetector({ fastMode: true, maxDetectedFaces: 1 });
+    }
+
+    const canvas = document.createElement("canvas");
+    const ctx = canvas.getContext("2d", { willReadFrequently: true });
+
+    // Fallback: estimate face region via skin-tone pixel concentration
+    function detectSkinTone(
+      vw: number,
+      vh: number,
+    ): { cx: number; cy: number; area: number } | null {
+      if (!ctx) return null;
+      canvas.width = 160; // downsample for speed
+      canvas.height = Math.round(160 * (vh / vw));
+      ctx.drawImage(video!, 0, 0, canvas.width, canvas.height);
+      const { data, width, height } = ctx.getImageData(
+        0,
+        0,
+        canvas.width,
+        canvas.height,
+      );
+
+      let sumX = 0,
+        sumY = 0,
+        count = 0;
+      for (let i = 0; i < data.length; i += 16) {
+        // sample every 4th pixel
+        const r = data[i],
+          g = data[i + 1],
+          b = data[i + 2];
+        // simple skin-tone heuristic (works across many skin tones)
+        if (
+          r > 60 &&
+          g > 40 &&
+          b > 20 &&
+          r > g &&
+          r > b &&
+          r - g > 15 &&
+          Math.abs(g - b) < 80
+        ) {
+          const px = ((i / 4) % width) / width;
+          const py = Math.floor(i / 4 / width) / height;
+          sumX += px;
+          sumY += py;
+          count++;
+        }
+      }
+      if (count < 30) return null; // not enough skin pixels
+      return {
+        cx: sumX / count, // 0-1 normalized
+        cy: sumY / count,
+        area: count / ((width * height) / 4), // fraction of sampled pixels
+      };
+    }
+
+    function evaluateBox(
+      cx: number,
+      cy: number,
+      areaRatio: number,
+    ): QualityState {
+      // Check centering (within ±20% of center)
+      const offCenterX = Math.abs(cx - 0.5);
+      const offCenterY = Math.abs(cy - 0.45); // slightly above center is ideal
+      if (offCenterX > 0.2 || offCenterY > 0.2) return "adjusting";
+      // Check distance via area
+      if (areaRatio > 0.55) return "too-close";
+      if (areaRatio < 0.05) return "too-far";
+      return "good";
+    }
+
+    async function tick() {
+      if (video!.readyState < 2) {
+        rafId = requestAnimationFrame(tick);
+        return;
+      }
+
+      const vw = video!.videoWidth;
+      const vh = video!.videoHeight;
+
+      let newQuality: QualityState = "adjusting";
+
+      if (faceDetector) {
+        try {
+          const faces = await faceDetector.detect(video!);
+          if (faces.length > 0) {
+            const box = faces[0].boundingBox;
+            const cx = (box.x + box.width / 2) / vw;
+            const cy = (box.y + box.height / 2) / vh;
+            const areaRatio = (box.width * box.height) / (vw * vh);
+            newQuality = evaluateBox(cx, cy, areaRatio);
+          }
+          // no face detected → stays "adjusting"
+        } catch {
+          // FaceDetector can throw if frame isn't ready; skip this tick
+        }
+      } else {
+        // Fallback: skin-tone analysis
+        const result = detectSkinTone(vw, vh);
+        if (result) {
+          newQuality = evaluateBox(result.cx, result.cy, result.area);
+        }
+      }
+
+      setQuality(newQuality);
+      rafId = requestAnimationFrame(tick);
+    }
+
+    // Small delay to let camera warm up on step change
+    const startDelay = setTimeout(() => {
+      rafId = requestAnimationFrame(tick);
+    }, 400);
+
+    return () => {
+      clearTimeout(startDelay);
+      cancelAnimationFrame(rafId);
+    };
   }, [camReady, currentStep]);
 
   const handleCapture = useCallback(() => {
