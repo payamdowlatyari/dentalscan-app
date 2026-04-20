@@ -7,7 +7,9 @@ import {
   CheckCircle2,
   AlertCircle,
   Loader2,
+  MessageSquare,
 } from "lucide-react";
+import QuickMessageSidebar from "./QuickMessageSidebar";
 
 // FaceDetector is an experimental browser API (Chrome/Edge)
 declare class FaceDetector {
@@ -98,6 +100,7 @@ export default function ScanningFlow() {
   const [flashVisible, setFlashVisible] = useState(false);
   const [notifyStatus, setNotifyStatus] = useState<NotifyStatus>("idle");
   const [capturedLabel, setCapturedLabel] = useState<string | null>(null);
+  const [sidebarOpen, setSidebarOpen] = useState(false);
 
   const VIEWS = [
     {
@@ -404,6 +407,11 @@ export default function ScanningFlow() {
                 <p className="text-zinc-400 text-sm">
                   Your dental scan has been submitted and is ready for review.
                 </p>
+                <button
+                  onClick={() => setSidebarOpen(true)}
+                  className="mt-3 inline-flex items-center gap-2 rounded-full bg-blue-600 hover:bg-blue-500 px-5 py-2.5 text-sm font-medium transition-colors">
+                  <MessageSquare size={14} /> Message Your Clinic
+                </button>
               </>
             )}
             {notifyStatus === "error" && (
@@ -487,6 +495,14 @@ export default function ScanningFlow() {
           </div>
         ))}
       </div>
+
+      {/* Quick-Message Sidebar */}
+      <QuickMessageSidebar
+        threadId={null}
+        patientId="example-user-id"
+        open={sidebarOpen}
+        onClose={() => setSidebarOpen(false)}
+      />
     </div>
   );
 }
