@@ -101,6 +101,7 @@ export default function ScanningFlow() {
   const [notifyStatus, setNotifyStatus] = useState<NotifyStatus>("idle");
   const [capturedLabel, setCapturedLabel] = useState<string | null>(null);
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [completedScanId, setCompletedScanId] = useState<string | null>(null);
 
   const VIEWS = [
     {
@@ -295,12 +296,16 @@ export default function ScanningFlow() {
 
     const notifyServer = async () => {
       setNotifyStatus("sending");
+      const scanId = completedScanId ?? `scan-${Date.now()}`;
+      if (!completedScanId) {
+        setCompletedScanId(scanId);
+      }
       try {
         const response = await fetch("/api/notify", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
-            scanId: `scan-${Date.now()}`,
+            scanId,
             status: "completed",
             userId: "example-user-id",
           }),
@@ -409,7 +414,8 @@ export default function ScanningFlow() {
                 </p>
                 <button
                   onClick={() => setSidebarOpen(true)}
-                  className="mt-3 inline-flex items-center gap-2 rounded-full bg-blue-600 hover:bg-blue-500 px-5 py-2.5 text-sm font-medium transition-colors">
+                  disabled={!completedScanId}
+                  className="mt-3 inline-flex items-center gap-2 rounded-full bg-blue-600 hover:bg-blue-500 disabled:opacity-50 disabled:hover:bg-blue-600 px-5 py-2.5 text-sm font-medium transition-colors">
                   <MessageSquare size={14} /> Message Your Clinic
                 </button>
               </>
@@ -426,6 +432,8 @@ export default function ScanningFlow() {
                     setCurrentStep(0);
                     setCapturedImages([]);
                     setNotifyStatus("idle");
+                    setCompletedScanId(null);
+                    setSidebarOpen(false);
                   }}
                   className="mt-2 inline-flex items-center gap-2 rounded-full bg-zinc-800 px-5 py-2 text-sm font-medium hover:bg-zinc-700 transition-colors">
                   <RefreshCw size={14} /> Retry Scan
@@ -498,7 +506,7 @@ export default function ScanningFlow() {
 
       {/* Quick-Message Sidebar */}
       <QuickMessageSidebar
-        threadId={null}
+        scanId={completedScanId}
         patientId="example-user-id"
         open={sidebarOpen}
         onClose={() => setSidebarOpen(false)}

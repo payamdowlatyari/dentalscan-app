@@ -26,10 +26,13 @@ model Notification {
 }
 
 model Thread {
-  id        String    @id @default(cuid())
-  patientId String
-  messages  Message[]
-  updatedAt DateTime  @updatedAt
+  id            String    @id @default(cuid())
+  patientId     String
+  scanId        String?   @unique
+  status        String    @default("open")
+  lastMessageAt DateTime  @default(now())
+  messages      Message[]
+  updatedAt     DateTime  @updatedAt
 }
 
 model Message {

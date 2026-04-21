@@ -16,15 +16,17 @@ export async function GET(req: Request) {
   try {
     const { searchParams } = new URL(req.url);
     const threadId = searchParams.get("threadId");
+    const scanId = searchParams.get("scanId");
 
-    if (!threadId) {
-      return NextResponse.json({ error: "Missing threadId" }, { status: 400 });
+    if (!threadId && !scanId) {
+      return NextResponse.json(
+        { error: "Missing threadId or scanId" },
+        { status: 400 },
+      );
     }
 
     const thread = await prisma.thread.findUnique({
-      where: {
-        id: threadId,
-      },
+      where: threadId ? { id: threadId } : { scanId: scanId! },
       include: {
         messages: {
           orderBy: {
@@ -82,6 +84,15 @@ export async function POST(req: Request) {
         content,
         sender,
         threadId,
+      },
+    });
+
+    await prisma.thread.update({
+      where: {
+        id: threadId,
+      },
+      data: {
+        lastMessageAt: new Date(),
       },
     });
 
