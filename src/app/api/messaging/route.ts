@@ -12,19 +12,25 @@ const prisma = new PrismaClient();
  * 3. Focus on data integrity and proper relations.
  */
 
+/**
+ * GET /api/messaging?threadId=xxx OR /api/messaging?scanId=yyy
+ * - Retrieves messages for a given threadId or scanId.
+ */
 export async function GET(req: Request) {
   try {
     const { searchParams } = new URL(req.url);
     const threadId = searchParams.get("threadId");
+    const scanId = searchParams.get("scanId");
 
-    if (!threadId) {
-      return NextResponse.json({ error: "Missing threadId" }, { status: 400 });
+    if (!threadId && !scanId) {
+      return NextResponse.json(
+        { error: "Missing threadId or scanId" },
+        { status: 400 },
+      );
     }
 
     const thread = await prisma.thread.findUnique({
-      where: {
-        id: threadId,
-      },
+      where: threadId ? { id: threadId } : { scanId: scanId! },
       include: {
         messages: {
           orderBy: {
@@ -48,6 +54,10 @@ export async function GET(req: Request) {
   }
 }
 
+/**
+ * POST /api/messaging
+ * - Creates a new message for a given threadId.
+ */
 export async function POST(req: Request) {
   try {
     const body = await req.json();
@@ -82,6 +92,15 @@ export async function POST(req: Request) {
         content,
         sender,
         threadId,
+      },
+    });
+
+    await prisma.thread.update({
+      where: {
+        id: threadId,
+      },
+      data: {
+        lastMessageAt: new Date(),
       },
     });
 

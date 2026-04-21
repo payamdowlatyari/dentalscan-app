@@ -22,6 +22,11 @@ declare class FaceDetector {
 type QualityState = "good" | "adjusting" | "too-close" | "too-far";
 type NotifyStatus = "idle" | "sending" | "success" | "error";
 
+/**
+ * MouthGuideOverlay Component
+ * - Displays an overlay with visual guidance for mouth positioning.
+ * - Shows feedback based on the quality of the detected mouth position.
+ */
 function MouthGuideOverlay({
   quality,
   label,
@@ -84,6 +89,10 @@ function MouthGuideOverlay({
   );
 }
 
+/**
+ * CaptureFlash Component
+ * - Displays a flash effect when capturing an image.
+ */
 function CaptureFlash({ visible }: { visible: boolean }) {
   if (!visible) return null;
   return (
@@ -91,7 +100,14 @@ function CaptureFlash({ visible }: { visible: boolean }) {
   );
 }
 
+/**
+ * ScanningFlow Component
+ * - Manages the scanning flow for a patient.
+ * - Captures images and sends them to the server.
+ * - Displays a live camera feed, quality feedback, and a sidebar for quick messaging.
+ */
 export default function ScanningFlow() {
+  const patientId = "example-user-id";
   const videoRef = useRef<HTMLVideoElement>(null);
   const [camReady, setCamReady] = useState(false);
   const [capturedImages, setCapturedImages] = useState<string[]>([]);
@@ -101,6 +117,18 @@ export default function ScanningFlow() {
   const [notifyStatus, setNotifyStatus] = useState<NotifyStatus>("idle");
   const [capturedLabel, setCapturedLabel] = useState<string | null>(null);
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [completedScanId, setCompletedScanId] = useState<string | null>(null);
+  const [selectedThreadId, setSelectedThreadId] = useState<string | null>(null);
+  const [recentThreads, setRecentThreads] = useState<
+    Array<{
+      id: string;
+      scanId: string | null;
+      lastMessageAt: string;
+      latestMessage: { content: string } | null;
+      messageCount: number;
+    }>
+  >([]);
+  const [threadsLoading, setThreadsLoading] = useState(false);
 
   const VIEWS = [
     {
@@ -130,6 +158,27 @@ export default function ScanningFlow() {
     }
     startCamera();
   }, []);
+
+  useEffect(() => {
+    const fetchRecentThreads = async () => {
+      setThreadsLoading(true);
+      try {
+        const response = await fetch(
+          `/api/messaging/thread?patientId=${patientId}`,
+        );
+        const data = await response.json();
+        if (data.ok && Array.isArray(data.data)) {
+          setRecentThreads(data.data);
+        }
+      } catch (err) {
+        console.error("Failed to load recent threads:", err);
+      } finally {
+        setThreadsLoading(false);
+      }
+    };
+
+    fetchRecentThreads();
+  }, [patientId]);
 
   // Real-time face/position detection
   useEffect(() => {
@@ -295,12 +344,16 @@ export default function ScanningFlow() {
 
     const notifyServer = async () => {
       setNotifyStatus("sending");
+      const scanId = completedScanId ?? `scan-${Date.now()}`;
+      if (!completedScanId) {
+        setCompletedScanId(scanId);
+      }
       try {
         const response = await fetch("/api/notify", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
-            scanId: `scan-${Date.now()}`,
+            scanId,
             status: "completed",
             userId: "example-user-id",
           }),
@@ -308,13 +361,21 @@ export default function ScanningFlow() {
         const data = await response.json();
         console.log("Notification API Response:", data);
         setNotifyStatus(data.ok ? "success" : "error");
+
+        const threadsResponse = await fetch(
+          `/api/messaging/thread?patientId=${patientId}`,
+        );
+        const threadsData = await threadsResponse.json();
+        if (threadsData.ok && Array.isArray(threadsData.data)) {
+          setRecentThreads(threadsData.data);
+        }
       } catch (err) {
         console.error("Failed to notify server:", err);
         setNotifyStatus("error");
       }
     };
     notifyServer();
-  }, [currentStep]);
+  }, [currentStep, completedScanId, patientId]);
 
   const qualityLabel =
     quality === "good"
@@ -343,6 +404,64 @@ export default function ScanningFlow() {
           className="h-full bg-blue-500 transition-all duration-500 ease-out"
           style={{ width: `${progress}%` }}
         />
+      </div>
+
+      {/* Returning User Shortcuts */}
+      <div className="w-full max-w-md px-4 pt-4 pb-2 space-y-2">
+        <div className="rounded-xl border border-zinc-800 bg-zinc-900/80 p-3">
+          <div className="flex items-center justify-between gap-2">
+            <div>
+              <p className="text-xs text-zinc-400">Returning user</p>
+              <p className="text-sm font-semibold">Resume conversation</p>
+            </div>
+            <button
+              onClick={() => {
+                if (!recentThreads[0]) return;
+                setSelectedThreadId(recentThreads[0].id);
+                setCompletedScanId(recentThreads[0].scanId);
+                setSidebarOpen(true);
+              }}
+              disabled={threadsLoading || recentThreads.length === 0}
+              className="inline-flex items-center gap-1.5 rounded-full bg-blue-600 px-3 py-1.5 text-xs font-medium hover:bg-blue-500 disabled:opacity-50 disabled:hover:bg-blue-600 transition-colors">
+              <MessageSquare size={12} /> Resume Last Chat
+            </button>
+          </div>
+
+          {threadsLoading ? (
+            <p className="text-[11px] text-zinc-500 mt-2">
+              Loading messages...
+            </p>
+          ) : recentThreads.length === 0 ? (
+            <p className="text-[11px] text-zinc-500 mt-2">
+              No previous conversations yet.
+            </p>
+          ) : (
+            <div className="mt-3 grid gap-2">
+              {recentThreads.slice(0, 3).map(thread => (
+                <button
+                  key={thread.id}
+                  onClick={() => {
+                    setSelectedThreadId(thread.id);
+                    setCompletedScanId(thread.scanId);
+                    setSidebarOpen(true);
+                  }}
+                  className="w-full text-left rounded-lg border border-zinc-800 hover:border-zinc-700 bg-zinc-900 px-3 py-2 transition-colors">
+                  <div className="flex items-center justify-between gap-2">
+                    <p className="text-xs font-medium text-zinc-200">
+                      {thread.scanId ?? "General conversation"}
+                    </p>
+                    <p className="text-[10px] text-zinc-500">
+                      {new Date(thread.lastMessageAt).toLocaleDateString()}
+                    </p>
+                  </div>
+                  <p className="mt-1 text-[11px] text-zinc-400 truncate">
+                    {thread.latestMessage?.content ?? "No messages yet"}
+                  </p>
+                </button>
+              ))}
+            </div>
+          )}
+        </div>
       </div>
 
       {/* Main Viewport */}
@@ -409,7 +528,8 @@ export default function ScanningFlow() {
                 </p>
                 <button
                   onClick={() => setSidebarOpen(true)}
-                  className="mt-3 inline-flex items-center gap-2 rounded-full bg-blue-600 hover:bg-blue-500 px-5 py-2.5 text-sm font-medium transition-colors">
+                  disabled={!completedScanId}
+                  className="mt-3 inline-flex items-center gap-2 rounded-full bg-blue-600 hover:bg-blue-500 disabled:opacity-50 disabled:hover:bg-blue-600 px-5 py-2.5 text-sm font-medium transition-colors">
                   <MessageSquare size={14} /> Message Your Clinic
                 </button>
               </>
@@ -426,6 +546,9 @@ export default function ScanningFlow() {
                     setCurrentStep(0);
                     setCapturedImages([]);
                     setNotifyStatus("idle");
+                    setCompletedScanId(null);
+                    setSidebarOpen(false);
+                    setSelectedThreadId(null);
                   }}
                   className="mt-2 inline-flex items-center gap-2 rounded-full bg-zinc-800 px-5 py-2 text-sm font-medium hover:bg-zinc-700 transition-colors">
                   <RefreshCw size={14} /> Retry Scan
@@ -498,10 +621,14 @@ export default function ScanningFlow() {
 
       {/* Quick-Message Sidebar */}
       <QuickMessageSidebar
-        threadId={null}
-        patientId="example-user-id"
+        threadId={selectedThreadId}
+        scanId={completedScanId}
+        patientId={patientId}
         open={sidebarOpen}
-        onClose={() => setSidebarOpen(false)}
+        onClose={() => {
+          setSidebarOpen(false);
+          setSelectedThreadId(null);
+        }}
       />
     </div>
   );

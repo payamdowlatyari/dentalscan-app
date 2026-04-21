@@ -10,13 +10,20 @@ interface Message {
   createdAt: string;
 }
 
+/**
+ * QuickMessageSidebar Component
+ * - Displays a sidebar for quick messaging between Patient and Dentist.
+ * - Handles sending and fetching messages for a given thread.
+ */
 export default function QuickMessageSidebar({
   threadId,
+  scanId,
   patientId,
   open,
   onClose,
 }: {
-  threadId: string | null;
+  threadId?: string | null;
+  scanId: string | null;
   patientId: string;
   open: boolean;
   onClose: () => void;
@@ -25,8 +32,36 @@ export default function QuickMessageSidebar({
   const [input, setInput] = useState("");
   const [sending, setSending] = useState(false);
   const [loading, setLoading] = useState(false);
-  const [activeThreadId, setActiveThreadId] = useState<string | null>(threadId);
+  const [activeThreadId, setActiveThreadId] = useState<string | null>(null);
   const bottomRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    setActiveThreadId(null);
+    setMessages([]);
+  }, [scanId, threadId]);
+
+  const ensureThread = useCallback(async () => {
+    if (activeThreadId) return activeThreadId;
+
+    if (threadId) {
+      setActiveThreadId(threadId);
+      return threadId;
+    }
+
+    if (!scanId) throw new Error("Missing scanId for messaging thread");
+
+    const threadRes = await fetch("/api/messaging/thread", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ patientId, scanId }),
+    });
+    const threadData = await threadRes.json();
+    if (!threadData.ok) throw new Error("Failed to create/find thread");
+
+    const tid = threadData.data.id as string;
+    setActiveThreadId(tid);
+    return tid;
+  }, [activeThreadId, patientId, scanId, threadId]);
 
   // Fetch messages when thread exists
   const fetchMessages = useCallback(async (tid: string) => {
@@ -45,6 +80,21 @@ export default function QuickMessageSidebar({
   }, []);
 
   useEffect(() => {
+    if (!open) return;
+
+    const init = async () => {
+      try {
+        const tid = await ensureThread();
+        fetchMessages(tid);
+      } catch (err) {
+        console.error("Failed to initialize thread:", err);
+      }
+    };
+
+    init();
+  }, [open, ensureThread, fetchMessages]);
+
+  useEffect(() => {
     if (activeThreadId && open) {
       fetchMessages(activeThreadId);
     }
@@ -61,20 +111,7 @@ export default function QuickMessageSidebar({
 
     setSending(true);
     try {
-      let tid = activeThreadId;
-
-      // Create thread on first message if none exists
-      if (!tid) {
-        const threadRes = await fetch("/api/messaging/thread", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ patientId }),
-        });
-        const threadData = await threadRes.json();
-        if (!threadData.ok) throw new Error("Failed to create thread");
-        tid = threadData.data.id;
-        setActiveThreadId(tid);
-      }
+      const tid = await ensureThread();
 
       const res = await fetch("/api/messaging", {
         method: "POST",
@@ -184,7 +221,7 @@ export default function QuickMessageSidebar({
             />
             <button
               onClick={handleSend}
-              disabled={!input.trim() || sending}
+              disabled={!input.trim() || sending || (!scanId && !threadId)}
               className="p-2 rounded-lg bg-blue-600 hover:bg-blue-500 disabled:opacity-40 disabled:hover:bg-blue-600 transition-colors">
               {sending ? (
                 <Loader2 size={16} className="animate-spin" />
