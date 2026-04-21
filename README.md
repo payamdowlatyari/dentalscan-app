@@ -86,3 +86,4 @@ http://localhost:3000
 
 - Current persistence uses SQLite in local development via Prisma.
 - Demo identity values (such as `example-user-id`) are placeholders and should be replaced by authenticated user context in production.
+- Walkthrough video https://www.loom.com/share/d877b6d4f11d438895128bab88e18046
