@@ -1,7 +1,5 @@
 # DentalScan AI - Engineering Challenge
 
-This repository contains the completed implementation for the DentalScan challenge described in [docs/assignment.md](docs/assignment.md).
-
 ## Implemented Scope
 
 ### Phase 1: Explore and Audit
