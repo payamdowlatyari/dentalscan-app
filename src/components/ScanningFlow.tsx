@@ -22,6 +22,11 @@ declare class FaceDetector {
 type QualityState = "good" | "adjusting" | "too-close" | "too-far";
 type NotifyStatus = "idle" | "sending" | "success" | "error";
 
+/**
+ * MouthGuideOverlay Component
+ * - Displays an overlay with visual guidance for mouth positioning.
+ * - Shows feedback based on the quality of the detected mouth position.
+ */
 function MouthGuideOverlay({
   quality,
   label,
@@ -84,6 +89,10 @@ function MouthGuideOverlay({
   );
 }
 
+/**
+ * CaptureFlash Component
+ * - Displays a flash effect when capturing an image.
+ */
 function CaptureFlash({ visible }: { visible: boolean }) {
   if (!visible) return null;
   return (
@@ -91,6 +100,12 @@ function CaptureFlash({ visible }: { visible: boolean }) {
   );
 }
 
+/**
+ * ScanningFlow Component
+ * - Manages the scanning flow for a patient.
+ * - Captures images and sends them to the server.
+ * - Displays a live camera feed, quality feedback, and a sidebar for quick messaging.
+ */
 export default function ScanningFlow() {
   const patientId = "example-user-id";
   const videoRef = useRef<HTMLVideoElement>(null);

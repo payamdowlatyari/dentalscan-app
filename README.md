@@ -1,44 +1,90 @@
-# DentalScan AI - Engineering Challenge Starter Kit
+# DentalScan AI - Engineering Challenge
 
-Welcome to the DentalScan Engineering Challenge! This repository is a "lite" version of our production environment. Your goal is to enhance this codebase according to the requirements in the [Assignment PDF](../docs/assignment.md).
+This repository contains the completed implementation for the DentalScan challenge described in [docs/assignment.md](docs/assignment.md).
 
-## 🚀 Getting Started
+## Implemented Scope
 
-1. **Install Dependencies**:
-   ```bash
-   npm install
-   ```
-2. **Setup Database**:
-   ```bash
-   npx prisma generate
-   ```
-3. **Run Development Server**:
-   ```bash
-   npm run dev
-   ```
+### Phase 1: Explore and Audit
 
-## 🦷 The Tasks
+- Audit document added: [AUDIT.md](AUDIT.md)
 
-### 1. Discovery (Explore First)
-Visit [https://www.dentalscan.us/](https://www.dentalscan.us/) to understand the core product. Experience how we take different angles of images and how they are processed.
+### Phase 2: Core Implementation
 
-### 2. Frontend: Scan Enhancement
-Improve `src/components/ScanningFlow.tsx`. 
-- **Goal**: Implement a "Mouth Guide" overlay that helps users center their face correctly.
-- **Bonus**: Add real-time visual feedback based on the simulated `guardrail` state.
+- Scan enhancement in [src/components/ScanningFlow.tsx](src/components/ScanningFlow.tsx)
+  - Mouth guide overlay
+  - Live quality feedback (`good`, `adjusting`, `too-close`, `too-far`)
+  - Capture flash, progress UI, and status states
+- Notification API in [src/app/api/notify/route.ts](src/app/api/notify/route.ts)
+  - Creates Prisma `Notification` records when scans complete
+- Messaging APIs in [src/app/api/messaging/route.ts](src/app/api/messaging/route.ts)
+  - Send and fetch messages for threads
 
-### 3. Backend: Notifications
-Work on `src/app/api/notify/route.ts`.
-- **Goal**: Implement a trigger that records a `Notification` in the database when a scan is finalized.
+### Phase 3: Messaging UX and Returning User Access
 
-### 4. Full-Stack: Messaging
-Implement a messaging sidebar on the result page.
-- **Goal**: Allow clinicians and patients to communicate.
-- **Models**: See `prisma/schema.prisma` for `Thread` and `Message`.
+- Quick-message sidebar in [src/components/QuickMessageSidebar.tsx](src/components/QuickMessageSidebar.tsx)
+- Per-scan thread model in [prisma/schema.prisma](prisma/schema.prisma)
+  - `Thread.scanId` (unique), `status`, `lastMessageAt`
+- Thread create/find and list APIs in [src/app/api/messaging/thread/route.ts](src/app/api/messaging/thread/route.ts)
+  - One thread per scan
+  - Returning user thread history listing by `patientId`
+- Resume chat shortcuts in [src/components/ScanningFlow.tsx](src/components/ScanningFlow.tsx)
+  - Resume last conversation
+  - Open one of the latest threads quickly
 
-## 📝 Submission
-- Ensure your code is clean and modular.
-- Include a 2-minute Loom video demoing your changes.
-- Email your repo link to `rachana@dentalscan.us`.
+## Local Setup
 
-**Happy Coding!**
+1. Install dependencies
+
+```bash
+npm install
+```
+
+2. Sync Prisma and generate client
+
+```bash
+npx prisma db push
+npx prisma generate
+```
+
+3. Start the app
+
+```bash
+npm run dev
+```
+
+4. Open
+
+```text
+http://localhost:3000
+```
+
+## API Summary
+
+### Notifications
+
+- `POST /api/notify`
+  - Body: `{ scanId, status, userId }`
+  - Creates a `Notification` when `status === "completed"`
+
+### Messaging
+
+- `GET /api/messaging?threadId=<id>`
+  - Returns messages for a thread (ascending by creation time)
+- `GET /api/messaging?scanId=<scanId>`
+  - Returns messages by scan-linked thread
+- `POST /api/messaging`
+  - Body: `{ threadId, content, sender }`
+  - Persists a message and updates thread `lastMessageAt`
+
+### Thread Management
+
+- `POST /api/messaging/thread`
+  - Body: `{ patientId, scanId }`
+  - Idempotent: returns existing thread for that scan or creates one
+- `GET /api/messaging/thread?patientId=<patientId>`
+  - Returns patient thread list sorted by latest activity
+
+## Notes
+
+- Current persistence uses SQLite in local development via Prisma.
+- Demo identity values (such as `example-user-id`) are placeholders and should be replaced by authenticated user context in production.

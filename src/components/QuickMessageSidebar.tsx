@@ -10,6 +10,11 @@ interface Message {
   createdAt: string;
 }
 
+/**
+ * QuickMessageSidebar Component
+ * - Displays a sidebar for quick messaging between Patient and Dentist.
+ * - Handles sending and fetching messages for a given thread.
+ */
 export default function QuickMessageSidebar({
   threadId,
   scanId,

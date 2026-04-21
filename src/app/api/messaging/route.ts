@@ -12,6 +12,10 @@ const prisma = new PrismaClient();
  * 3. Focus on data integrity and proper relations.
  */
 
+/**
+ * GET /api/messaging?threadId=xxx OR /api/messaging?scanId=yyy
+ * - Retrieves messages for a given threadId or scanId.
+ */
 export async function GET(req: Request) {
   try {
     const { searchParams } = new URL(req.url);
@@ -50,6 +54,10 @@ export async function GET(req: Request) {
   }
 }
 
+/**
+ * POST /api/messaging
+ * - Creates a new message for a given threadId.
+ */
 export async function POST(req: Request) {
   try {
     const body = await req.json();
