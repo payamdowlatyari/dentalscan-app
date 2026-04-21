@@ -36,3 +36,12 @@ body {
     transform: translate(-50%, -12px);
   }
 }
+
+@keyframes slideInRight {
+  from {
+    transform: translateX(100%);
+  }
+  to {
+    transform: translateX(0);
+  }
+}
