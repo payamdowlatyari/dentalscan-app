@@ -11,11 +11,13 @@ interface Message {
 }
 
 export default function QuickMessageSidebar({
+  threadId,
   scanId,
   patientId,
   open,
   onClose,
 }: {
+  threadId?: string | null;
   scanId: string | null;
   patientId: string;
   open: boolean;
@@ -31,10 +33,16 @@ export default function QuickMessageSidebar({
   useEffect(() => {
     setActiveThreadId(null);
     setMessages([]);
-  }, [scanId]);
+  }, [scanId, threadId]);
 
   const ensureThread = useCallback(async () => {
     if (activeThreadId) return activeThreadId;
+
+    if (threadId) {
+      setActiveThreadId(threadId);
+      return threadId;
+    }
+
     if (!scanId) throw new Error("Missing scanId for messaging thread");
 
     const threadRes = await fetch("/api/messaging/thread", {
@@ -48,7 +56,7 @@ export default function QuickMessageSidebar({
     const tid = threadData.data.id as string;
     setActiveThreadId(tid);
     return tid;
-  }, [activeThreadId, patientId, scanId]);
+  }, [activeThreadId, patientId, scanId, threadId]);
 
   // Fetch messages when thread exists
   const fetchMessages = useCallback(async (tid: string) => {
@@ -208,7 +216,7 @@ export default function QuickMessageSidebar({
             />
             <button
               onClick={handleSend}
-              disabled={!input.trim() || sending || !scanId}
+              disabled={!input.trim() || sending || (!scanId && !threadId)}
               className="p-2 rounded-lg bg-blue-600 hover:bg-blue-500 disabled:opacity-40 disabled:hover:bg-blue-600 transition-colors">
               {sending ? (
                 <Loader2 size={16} className="animate-spin" />
